@@ -161,19 +161,17 @@ Features:
 - `/api/admin/reconcile`
   - Resolves or voids matured markets
 - `/.well-known/farcaster.json`
-  - Redirects to the Farcaster hosted manifest for this domain
+  - Returns the self-hosted Farcaster Mini App manifest for this domain
 - `/api/share-image`
   - Open Graph and Mini App image
 
 ## Manifest Strategy
 
-Smallbetting now uses a Farcaster hosted manifest.
+Smallbetting currently uses a self-hosted Farcaster manifest served from:
 
-The application route at `/.well-known/farcaster.json` returns a temporary `307` redirect to:
+- `https://smallbetting-mini-app.vercel.app/.well-known/farcaster.json`
 
-- `https://api.farcaster.xyz/miniapps/hosted-manifest/019d33c8-7939-bbad-6277-a3f3a9426b72`
-
-This keeps the app aligned with Farcaster publishing guidance and lets manifest updates be managed through Farcaster developer tools without requiring a redeploy for every metadata change.
+This avoids dependency on a Farcaster hosted manifest ID and keeps publishing stable as long as the deployed manifest matches the selected domain.
 
 ## Cron Strategy
 
@@ -273,7 +271,7 @@ Notes:
 2. Set the contract address in environment variables
 3. Deploy the app to a public HTTPS host
 4. Update `NEXT_PUBLIC_APP_URL`
-5. Confirm `/.well-known/farcaster.json` redirects correctly
+5. Confirm `/.well-known/farcaster.json` returns valid JSON
 6. Run market sync once
 7. Configure external recurring sync and reconcile jobs
 8. Test the launch flow inside Farcaster
