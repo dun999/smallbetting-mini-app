@@ -11,7 +11,7 @@ function isAuthorized(request) {
   return isVercelCron || (ADMIN_SECRET && secret === ADMIN_SECRET);
 }
 
-export async function POST(request) {
+async function run(request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
@@ -22,4 +22,12 @@ export async function POST(request) {
   } catch (error) {
     return NextResponse.json({ error: error.message || "Failed to sync markets." }, { status: 500 });
   }
+}
+
+export async function GET(request) {
+  return run(request);
+}
+
+export async function POST(request) {
+  return run(request);
 }
