@@ -7,6 +7,18 @@ import sdk from "@farcaster/miniapp-sdk";
 import { BASE_CHAIN_HEX, CONTRACT_ADDRESS, MAX_ENTRY_USDC, USDC_ADDRESS } from "../lib/config.js";
 import { ERC20_ABI, SMALLBETTING_ABI } from "../lib/abis.js";
 
+const BASE_CHAIN_PARAMS = {
+  chainId: BASE_CHAIN_HEX,
+  chainName: "Base",
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18
+  },
+  rpcUrls: ["https://mainnet.base.org"],
+  blockExplorerUrls: ["https://basescan.org"]
+};
+
 function abbreviateAddress(address) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -17,6 +29,32 @@ function formatUsd(amount) {
     currency: "USD",
     maximumFractionDigits: amount >= 1000 ? 0 : 2
   }).format(amount);
+}
+
+function normalizeWalletError(error) {
+  const message = error?.shortMessage || error?.message || String(error);
+
+  if (message.includes("User rejected") || message.includes("user rejected") || error?.code === 4001) {
+    return "The wallet request was rejected.";
+  }
+
+  if (message.includes("wallet provider is unavailable")) {
+    return "No wallet provider was found. Open the app inside Farcaster or use a browser wallet such as MetaMask.";
+  }
+
+  if (message.includes("market exposure exceeded")) {
+    return "This bet would push your total exposure above the $5 per-market limit.";
+  }
+
+  if (message.includes("market closed")) {
+    return "This market is already locked.";
+  }
+
+  if (message.includes("insufficient funds")) {
+    return "The connected wallet does not have enough ETH for gas or enough USDC for this bet.";
+  }
+
+  return message;
 }
 
 function usePolling(url, intervalMs) {
@@ -49,24 +87,69 @@ function usePolling(url, intervalMs) {
   return state;
 }
 
-async function resolveInjectedProvider() {
+async function detectWalletProvider() {
+  const isMiniApp = await sdk.isInMiniApp().catch(() => false);
   const farcasterProvider = await sdk.wallet.getEthereumProvider().catch(() => undefined);
-  if (farcasterProvider) return farcasterProvider;
-  if (typeof window !== "undefined" && window.ethereum) return window.ethereum;
-  return undefined;
+
+  if (farcasterProvider) {
+    return { provider: farcasterProvider, source: isMiniApp ? "farcaster" : "embedded" };
+  }
+
+  if (typeof window !== "undefined" && window.ethereum) {
+    return { provider: window.ethereum, source: "browser" };
+  }
+
+  return { provider: undefined, source: isMiniApp ? "farcaster" : "none" };
+}
+
+async function ensureBaseChain(injected, source) {
+  try {
+    const currentChain = await injected.request({ method: "eth_chainId" });
+    if (currentChain === BASE_CHAIN_HEX) {
+      return;
+    }
+  } catch (error) {
+    console.warn("eth_chainId failed", error);
+  }
+
+  try {
+    await injected.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BASE_CHAIN_HEX }] });
+    return;
+  } catch (error) {
+    const code = error?.code;
+    if (code !== 4902 && code !== -32603) {
+      throw error;
+    }
+  }
+
+  if (source === "browser") {
+    await injected.request({ method: "wallet_addEthereumChain", params: [BASE_CHAIN_PARAMS] });
+    await injected.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BASE_CHAIN_HEX }] });
+    return;
+  }
+
+  throw new Error("Please switch the wallet to Base to continue.");
 }
 
 async function getWalletClients() {
-  const injected = await resolveInjectedProvider();
-  if (!injected) throw new Error("Wallet provider is unavailable inside this client.");
-  try {
-    await injected.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BASE_CHAIN_HEX }] });
-  } catch (error) {
-    console.warn("wallet_switchEthereumChain failed", error);
+  const detected = await detectWalletProvider();
+  const injected = detected.provider;
+  if (!injected) {
+    throw new Error("wallet provider is unavailable inside this client.");
   }
+
+  await injected.request({ method: "eth_requestAccounts" });
+  await ensureBaseChain(injected, detected.source);
+
   const browserProvider = new BrowserProvider(injected);
   const signer = await browserProvider.getSigner();
-  return { provider: browserProvider, signer, address: await signer.getAddress() };
+
+  return {
+    provider: browserProvider,
+    signer,
+    address: await signer.getAddress(),
+    source: detected.source
+  };
 }
 
 function MarketCard({ card, amount, onAmountChange, onBet, onClaim, pendingAction, walletAddress, position }) {
@@ -188,6 +271,7 @@ function FaqSection() {
 export function MiniAppShell() {
   const dashboard = usePolling("/api/markets", 30000);
   const [walletAddress, setWalletAddress] = useState("");
+  const [walletSource, setWalletSource] = useState("");
   const [amounts, setAmounts] = useState({ btc: "1", epl: "1", laliga: "1", ucl: "1" });
   const [positions, setPositions] = useState({});
   const [pendingAction, setPendingAction] = useState("");
@@ -218,10 +302,15 @@ export function MiniAppShell() {
 
   async function connectWallet() {
     setStatus("Connecting wallet...");
-    const clients = await getWalletClients();
-    setWalletAddress(clients.address);
-    setStatus(`Connected ${abbreviateAddress(clients.address)}`);
-    await refreshPositions(clients.address);
+    try {
+      const clients = await getWalletClients();
+      setWalletAddress(clients.address);
+      setWalletSource(clients.source);
+      setStatus(`Connected ${abbreviateAddress(clients.address)} via ${clients.source === "farcaster" ? "Farcaster Wallet" : clients.source === "browser" ? "browser wallet" : "embedded wallet"}.`);
+      await refreshPositions(clients.address);
+    } catch (error) {
+      setStatus(normalizeWalletError(error));
+    }
   }
 
   async function handleBet(marketId, side, rawAmount) {
@@ -235,8 +324,9 @@ export function MiniAppShell() {
     setStatus("Waiting for wallet confirmation...");
 
     try {
-      const { signer, address } = await getWalletClients();
+      const { signer, address, source } = await getWalletClients();
       if (!walletAddress) setWalletAddress(address);
+      if (!walletSource) setWalletSource(source);
       const usdc = new Contract(USDC_ADDRESS, ERC20_ABI, signer);
       const market = new Contract(CONTRACT_ADDRESS, SMALLBETTING_ABI, signer);
       const amount = ethers.parseUnits(parsed.toFixed(2), 6);
@@ -257,7 +347,7 @@ export function MiniAppShell() {
       setStatus("Bet placed successfully.");
       await refreshPositions(address);
     } catch (error) {
-      setStatus(error.message || "Bet failed.");
+      setStatus(normalizeWalletError(error));
     } finally {
       setPendingAction("");
     }
@@ -275,7 +365,7 @@ export function MiniAppShell() {
       setStatus("Claim completed.");
       await refreshPositions(address);
     } catch (error) {
-      setStatus(error.message || "Claim failed.");
+      setStatus(normalizeWalletError(error));
     } finally {
       setPendingAction("");
     }
@@ -313,7 +403,7 @@ export function MiniAppShell() {
               <small>Wallet</small>
               <h2>{walletAddress ? abbreviateAddress(walletAddress) : "Not connected"}</h2>
               <div className="wallet-row">
-                <span className="subtle">{status || "Connect inside Farcaster or a compatible browser wallet."}</span>
+                <span className="subtle">{status || (walletSource ? `Connected through ${walletSource}.` : "Connect inside Farcaster or use a browser wallet on Base.")}</span>
                 <button className="cta-button" onClick={connectWallet}>{walletAddress ? "Reconnect" : "Connect"}</button>
               </div>
             </div>

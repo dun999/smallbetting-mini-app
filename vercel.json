@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/sync-markets",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/admin/reconcile",
+      "schedule": "* * * * *"
+    }
+  ]
+}

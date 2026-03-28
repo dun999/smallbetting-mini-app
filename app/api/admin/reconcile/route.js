@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 function isAuthorized(request) {
   const secret = request.headers.get("x-admin-secret") || new URL(request.url).searchParams.get("secret");
-  return ADMIN_SECRET && secret === ADMIN_SECRET;
+  const userAgent = request.headers.get("user-agent") || "";
+  const isVercelCron = userAgent.toLowerCase().includes("vercel-cron");
+  return isVercelCron || (ADMIN_SECRET && secret === ADMIN_SECRET);
 }
 
 export async function POST(request) {
