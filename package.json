@@ -1,0 +1,25 @@
+{
+  "name": "smallbetting-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "compile": "node scripts/compile.js",
+    "deploy:base": "node scripts/deploy-base.js",
+    "sync:markets": "node scripts/sync-live-markets.js",
+    "reconcile:markets": "node scripts/reconcile-markets.js"
+  },
+  "dependencies": {
+    "@farcaster/miniapp-sdk": "^0.2.3",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.2",
+    "next": "^16.2.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1",
+    "solc": "^0.8.30"
+  }
+}
