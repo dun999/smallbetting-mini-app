@@ -1,5 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/.well-known/farcaster.json",
+      "destination": "https://api.farcaster.xyz/miniapps/hosted-manifest/019d33c8-7939-bbad-6277-a3f3a9426b72",
+      "permanent": false
+    }
+  ],
   "crons": [
     {
       "path": "/api/admin/sync-markets",
