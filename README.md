@@ -165,6 +165,46 @@ Features:
 - `/api/share-image`
   - Open Graph and Mini App image
 
+## Cron Strategy
+
+Smallbetting uses two different cron layers in production.
+
+### 1. External Cron For Real-Time Operation
+
+Use an external scheduler such as `cron-job.org` as the primary automation layer.
+
+This is required because:
+
+- Bitcoin markets rotate every `10 minutes`
+- Settlement should happen shortly after a market becomes resolvable
+- Vercel Hobby cron is not frequent enough for this product
+
+Recommended external cron frequency:
+
+- `/api/admin/sync-markets`: every `1 minute`
+- `/api/admin/reconcile`: every `1 minute`
+
+Recommended external cron URLs:
+
+- `https://smallbetting-mini-app.vercel.app/api/admin/sync-markets?secret=YOUR_ADMIN_SECRET`
+- `https://smallbetting-mini-app.vercel.app/api/admin/reconcile?secret=YOUR_ADMIN_SECRET`
+
+A dedicated setup guide is included in:
+
+- [docs/cron-job-org.md](/D:/ideGPT/docs/cron-job-org.md)
+
+### 2. Vercel Hobby Backup Cron
+
+The repository still includes a low-frequency `vercel.json` cron configuration so the project remains compatible with Vercel Hobby pricing limits.
+
+This backup cron is useful for:
+
+- a minimal safety net
+- occasional housekeeping
+- environments where external cron has not been configured yet
+
+It is not sufficient for the rolling Bitcoin market by itself.
+
 ## Local Development
 
 Install dependencies:
@@ -214,7 +254,8 @@ Notes:
 
 - `key.txt` is supported for local admin operations, but should never be committed
 - `NEXT_PUBLIC_APP_URL` must point to a public HTTPS URL for real Farcaster testing
-- `ADMIN_SECRET` protects admin API routes
+- `ADMIN_SECRET` protects admin API routes and should also be used by your external cron jobs
+- `OWNER_PRIVATE_KEY` must belong to the wallet that has `marketCreator` and `resolver` permissions if server-side sync and settlement are enabled
 
 ## Deployment Checklist
 
@@ -223,8 +264,8 @@ Notes:
 3. Deploy the app to a public HTTPS host
 4. Update `NEXT_PUBLIC_APP_URL`
 5. Confirm `/.well-known/farcaster.json` is publicly reachable
-6. Run market sync
-7. Configure recurring reconcile and sync jobs
+6. Run market sync once
+7. Configure external recurring sync and reconcile jobs
 8. Test the launch flow inside Farcaster
 
 ## Operational Recommendations
@@ -234,6 +275,7 @@ Notes:
 - Monitor failed reconcile runs
 - Rotate RPC providers if one starts rate-limiting reads
 - Keep market sync and reconcile jobs on a schedule
+- Treat Vercel Hobby cron as a backup, not as the primary scheduler for BTC markets
 
 ## Important Note About Contract Versions
 

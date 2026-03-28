@@ -3,11 +3,11 @@
   "crons": [
     {
       "path": "/api/admin/sync-markets",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/admin/reconcile",
-      "schedule": "* * * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
