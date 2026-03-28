@@ -3,9 +3,9 @@ import { APP_NAME, APP_URL } from "../lib/config.js";
 
 const embed = {
   version: "1",
-  imageUrl: `${APP_URL}/api/share-image`,
+  imageUrl: `${APP_URL}/image.png`,
   button: {
-    title: "Launch Smallbetting",
+    title: "Bet with a $5 cap",
     action: {
       type: "launch_miniapp",
       name: APP_NAME,
@@ -17,7 +17,7 @@ const embed = {
 export const metadata = {
   metadataBase: new URL(APP_URL),
   title: `${APP_NAME} | Base x Farcaster`,
-  description: "Micro prediction mini app for BTC and football on Base."
+  description: "SmallBetting is a Base mini app for BTC and football micro prediction markets."
 };
 
 export default function RootLayout({ children }) {
